@@ -1,0 +1,7 @@
+.project
+.cproject
+[Dd]ebug/
+[Rr]elease/
+*.ld
+*.txt
+*.spec
