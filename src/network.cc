@@ -9,6 +9,7 @@
 #include "lwip/init.h"
 #include "network.h"
 #include "singleton.h"
+#include "event.h"
 
 #if LWIP_DHCP==1
 #include "lwip/dhcp.h"
@@ -46,7 +47,9 @@ timer_callback(XScuTimer * TimerInstance)
 #if LWIP_DHCP==1
     static int dhcp_timer = 0;
 #endif
-    TcpFastTmrFlag = 1;
+    //TcpFastTmrFlag = 1;
+    auto& event = get_instance<EventManager>();
+    event.emit(E_TcpFastTimmer);
 
 	odd = !odd;
 #ifndef USE_SOFTETH_ON_ZYNQ
@@ -57,7 +60,8 @@ timer_callback(XScuTimer * TimerInstance)
 		dhcp_timer++;
 		dhcp_timoutcntr--;
 #endif
-		TcpSlowTmrFlag = 1;
+		//TcpSlowTmrFlag = 1;
+		event.emit(E_TcpSlowTimmer);
 #if LWIP_DHCP==1
 		dhcp_fine_tmr();
 		if (dhcp_timer >= 120) {
@@ -156,6 +160,20 @@ void print_ip_settings(const struct ip_addr *ip,
 	print_ip("Gateway : ", gw);
 }
 
+bool tcp_fast_callback() {
+	tcp_fasttmr();
+	return true;
+}
+bool tcp_slow_callback() {
+	tcp_slowtmr();
+	return true;
+}
+bool emac_callback() {
+	auto& ODNetif = get_instance<struct netif>();
+	xemacif_input(&ODNetif);
+	return true;
+}
+
 int network_init() {
 	network_setup_timer();
 	network_setup_timer_interrupt();
@@ -219,6 +237,11 @@ int network_init() {
 
 	print_ip_settings(&ipaddr, &netmask, &gw);
 
+	// register event disposal function
+	auto& eventm = get_instance<EventManager>();
+	eventm.register_function(E_TcpFastTimmer, tcp_fast_callback);
+	eventm.register_function(E_TcpSlowTimmer, tcp_slow_callback);
+	// eventm.register_function(E_EMAC, emac_callback);
 	return 0;
 }
 

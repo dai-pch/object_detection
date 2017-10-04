@@ -8,6 +8,8 @@
 #ifndef SRC_HTTP_H_
 #define SRC_HTTP_H_
 
+#include <string>
+#include <map>
 #include "network.h"
 #include "http_parser.h"
 
@@ -16,10 +18,16 @@ enum class HttpRequestType {
 	HttpPost
 };
 
+enum class HttpState {
+	SHttpReady,
+	SHttpLogging,
+	SHttpGetting,
+	SHttpPosting
+};
+
 class HttpConnection {
 public:
 	HttpConnection() {
-		connect();
 		parser_settings.on_message_complete
 					= parse_on_message_complete_callback;
 		parser_settings.on_body
@@ -27,15 +35,22 @@ public:
 		parser = (http_parser*)malloc(sizeof(http_parser));
 		http_parser_init(parser, HTTP_REQUEST);
 		parser->data = (void*)this;
+
+		addr = print_ip(&dest_ip);
+
+		connect();
 	}
 	~HttpConnection() {
 		_close();
 		free(parser);
+		free(token);
 	}
 
 public:
 	bool get_image(const unsigned id);
-	bool post(const char* url, const void* contents, const unsigned len);
+	bool post_result(const std::string& url, const std::map<std::string, std::string>& contents);
+	bool login(const std::string& username, const std::string& password);
+	std::string print_ip(const ip_addr_t *ip) const;
 
 public:
 	static err_t connected_callback(void* class_ptr,
@@ -78,20 +93,25 @@ private:
 private:
 	void _close();
 	err_t connect();
+	bool get(const std::string& url, const std::map<std::string, std::string>& contents);
+	bool post(const std::string& url, const char* contents, size_t length);
+	bool post(const std::string& url, const std::map<std::string, std::string>& contents);
 
 private:
-	tcp_pcb* tpcb;
 	ip_addr_t dest_ip;
-	char* addr;
+	std::string addr;
 	u16_t dest_port;
-	bool is_waiting;
-	bool is_get;
+
+	HttpState state;
+	int get_id;
+	tcp_pcb* tpcb;
+	char* data;
+	size_t data_len;
+	char* token;
+	size_t token_len;
 
 	http_parser_settings parser_settings;
 	http_parser *parser;
-
-	char* data;
-	size_t data_len;
 };
 
 #endif /* SRC_HTTP_H_ */

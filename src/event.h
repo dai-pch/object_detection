@@ -3,10 +3,18 @@
 
 #include <queue>
 #include <map>
+#include "lwip/tcp_impl.h"
+#include "lwip/tcp.h"
+#include "netif/xadapter.h"
+#include "config.h"
 #include "cycque.h"
+#include "singleton.h"
 
 using event_id_t = unsigned;
-using callback_t = void(void);
+using callback_t = bool(void);
+
+extern volatile int TcpFastTmrFlag;
+extern volatile int TcpSlowTmrFlag;
 
 class trigger {
 public:
@@ -35,21 +43,31 @@ public:
 			if (!_queue.empty()) {
 				auto tmp = _queue.top();
 				auto id = tmp.event_id;
+				_queue.pop();
 				auto it = _events.find(id);
 				if (it == _events.end()) {
 					warn(tmp);
 				} else {
 					for (auto func: it->second) {
-						(*func)();
+						if (!(*func)()){
+							tmp.priority += 5;
+							_queue.push(tmp);
+							LOG("Dispose event %d failed.", id);
+						} else {
+							LOG("Dispose event %d completed.", id);
+						}
 					}
 				}
-				_queue.pop();
 			}
+			// temprary
+			auto& ODNetif = get_instance<struct netif>();
+			xemacif_input(&ODNetif);
 		}
 	}
 
 private:
 	void warn(const trigger& trig) {
+		LOG("Undisposaled event. Event id: %d", trig.event_id);
 		return;
 	}
 	void flush() {
